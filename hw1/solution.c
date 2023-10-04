@@ -441,7 +441,7 @@ int main(int argc, char **argv) {
 
     clock_gettime(CLOCK_MONOTONIC, &total_end_time);
     total_time = calculate_time_difference(total_start_time, total_end_time) / 1000;
-    printf("Total execution time: %ld microseconds\n", total_time);
+    printf("Total execution time: %" PRId64 " microseconds\n", total_time);
 
     // Cleanup
     for (int i = 0; i < min(coroutines_num, f_stor->count); i++) {
