@@ -1,11 +1,16 @@
 GCC_FLAGS = -Wextra -Werror -Wall -Wno-gnu-folding-constant
 
-all: main1 main3 main4 main5 main6 main7
+all: main1 main2 main3 main4 main5 main6 main7
 
 main1: 1/main1.c
 	gcc $(GCC_FLAGS) 1/main1.c -o 1/main1 -g
 	chmod -x 1/main1
 	./1/main1
+
+main2: 2/main2.c
+	gcc $(GCC_FLAGS) 2/main2.c -o 2/main2 -g
+	chmod -x 2/main2
+	./2/main2
 
 main3: 3/main3.c
 	gcc $(GCC_FLAGS) 3/main3.c -o 3/main3 -g
