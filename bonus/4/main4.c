@@ -21,7 +21,7 @@ void benchmark() {
         clock_gettime(CLOCK_MONOTONIC, &start);
         pthread_create(&thread, NULL, dummy_function, NULL);
         pthread_join(thread, NULL);
-        clock_gettime(CLOCK_MONOTONIC, &end);
+        clock_gettime(CLOCK_MONOTONIC, &end); // PER ONE PAIR(as in task)
 
         duration = (end.tv_sec - start.tv_sec) * 1e9;
         duration += (end.tv_nsec - start.tv_nsec);
