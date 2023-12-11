@@ -14,11 +14,15 @@ main3: 3/main3.c
 	./3/main3 2
 	./3/main3 3
 
-
 main4: 4/main4.c
 	gcc $(GCC_FLAGS) 4/main4.c -o 4/main4 -g
 	chmod -x 4/main4
 	./4/main4
+
+main5: 5/main5.c
+	gcc $(GCC_FLAGS) 5/main5.c -o 5/main5 -g
+	chmod -x 5/main5
+	./5/main5
 
 clean:
 	rm -f 1/main1 2/main2 3/main3 4/main4 5/main5 6/main6 7/main7
