@@ -88,8 +88,9 @@ void server(int pack_size, long total_size) {
 }
 
 void client(int pack_size, long total_size) {
+
     struct sockaddr_in serv_addr;
-    int sock = 0;
+    int sock;
     long total_sent = 0;
     char buffer[pack_size];
 
@@ -109,9 +110,18 @@ void client(int pack_size, long total_size) {
         exit(EXIT_FAILURE);
     }
 
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        printf("\nConnection Failed \n");
-        exit(EXIT_FAILURE);
+    //Trying to connect to server until connection established
+    while (1) {
+        if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+            printf("\n Socket creation error \n");
+            exit(EXIT_FAILURE);
+        }
+
+        if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) >= 0) {
+            break;
+        }
+
+        close(sock); // Close the socket and try again
     }
 
     make_socket_non_blocking(sock);
@@ -154,6 +164,7 @@ int main() {
     int pack_sizes[] = {16384, 1024, 49152, 512}; // 16KB, 1KB, 48KB, 512B
     long total_size = 15L * 1024 * 1024 * 1024; // 15GB
 
+
     for (unsigned long i = 0; i < sizeof(pack_sizes) / sizeof(int); i++) {
         int pack_size = pack_sizes[i];
         double *durations = malloc(NUM_RUNS * sizeof(double));
@@ -174,9 +185,7 @@ int main() {
                 exit(0);
             } else {
                 // Parent process runs the client
-                sleep(1); // Wait for server to start
                 client(pack_size, total_size);
-
                 // Wait for child process to finish
                 wait(NULL);
             }
@@ -190,6 +199,7 @@ int main() {
         double min, max, median;
         calculate_stats(durations, NUM_RUNS, &min, &max, &median);
         printf("Pack size: %d bytes, Min: %f, Max: %f, Median: %f seconds\n", pack_size, min, max, median);
+        free(durations); // Free the allocated memory
     }
 
     return 0;

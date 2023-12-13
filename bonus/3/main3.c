@@ -10,10 +10,8 @@ pthread_mutex_t mutex;
 atomic_int counter = 0;
 long long *times; // Dynamic array to store durations of each lock/unlock operation
 
-int compare_ll(const void *a, const void *b) {
-    long long arg1 = *(const long long *)a;
-    long long arg2 = *(const long long *)b;
-    return (arg1 > arg2) - (arg1 < arg2);
+int cmp(const void *a, const void *b) {
+    return (*(long long*)a - *(long long*)b);
 }
 
 void *thread_function(void *arg) {
@@ -33,7 +31,7 @@ void *thread_function(void *arg) {
         pthread_mutex_unlock(&mutex);
         clock_gettime(CLOCK_MONOTONIC, &end);
 
-        times[counter] = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
+        times[counter-1] = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
     }
 
     return NULL;
@@ -61,7 +59,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Sorting the times array to find min, max, and median
-    qsort(times, counter, sizeof(long long), compare_ll);
+    qsort(times, counter, sizeof(long long), cmp);
 
     long long min_time = times[0];
     long long max_time = times[counter - 1];
