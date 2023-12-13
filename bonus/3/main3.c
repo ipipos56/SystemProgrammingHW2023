@@ -3,28 +3,40 @@
 #include <pthread.h>
 #include <time.h>
 #include <stdatomic.h>
-#include <string.h>
 
-#define NUM_LOCKS 10000000 // 10 million locks/unlocks
-#define NUM_RUNS 5 // Number of runs for calculating min, max, and median
+#define NUM_LOCKS 10000000 // 10 million locks/unlocks total
 
 pthread_mutex_t mutex;
 atomic_int counter = 0;
+long long *times; // Dynamic array to store durations of each lock/unlock operation
+
+int compare_ll(const void *a, const void *b) {
+    long long arg1 = *(const long long *)a;
+    long long arg2 = *(const long long *)b;
+    return (arg1 > arg2) - (arg1 < arg2);
+}
 
 void *thread_function(void *arg) {
     (void)arg;
-    for (int i = 0; i < NUM_LOCKS; i++) {
+    struct timespec start, end;
+
+    while (1) {
+        clock_gettime(CLOCK_MONOTONIC, &start);
         pthread_mutex_lock(&mutex);
+
+        if (counter >= NUM_LOCKS) {
+            pthread_mutex_unlock(&mutex);
+            break;
+        }
+
         counter++;
         pthread_mutex_unlock(&mutex);
-    }
-    return NULL;
-}
+        clock_gettime(CLOCK_MONOTONIC, &end);
 
-int compare(const void *a, const void *b) {
-    long long a_val = *(const long long *)a;
-    long long b_val = *(const long long *)b;
-    return (a_val > b_val) - (a_val < b_val);
+        times[counter] = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
+    }
+
+    return NULL;
 }
 
 int main(int argc, char *argv[]) {
@@ -37,31 +49,27 @@ int main(int argc, char *argv[]) {
     pthread_t threads[num_threads];
     pthread_mutex_init(&mutex, NULL);
 
-    long long durations[NUM_RUNS];
+    // Allocate memory for times array
+    times = malloc(NUM_LOCKS * sizeof(long long));
 
-    for (int run = 0; run < NUM_RUNS; run++) {
-        struct timespec start, end;
-        clock_gettime(CLOCK_MONOTONIC, &start);
-
-        for (int i = 0; i < num_threads; i++) {
-            pthread_create(&threads[i], NULL, thread_function, NULL);
-        }
-
-        for (int i = 0; i < num_threads; i++) {
-            pthread_join(threads[i], NULL);
-        }
-
-        clock_gettime(CLOCK_MONOTONIC, &end);
-        durations[run] = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
+    for (int i = 0; i < num_threads; i++) {
+        pthread_create(&threads[i], NULL, thread_function, NULL);
     }
 
-    qsort(durations, NUM_RUNS, sizeof(long long), compare);
+    for (int i = 0; i < num_threads; i++) {
+        pthread_join(threads[i], NULL);
+    }
 
-    printf("For %d threads:\n", num_threads);
-    printf("Min Duration: %lld ns\n", durations[0]);
-    printf("Max Duration: %lld ns\n", durations[NUM_RUNS - 1]);
-    printf("Median Duration: %lld ns\n", durations[NUM_RUNS / 2]);
+    // Sorting the times array to find min, max, and median
+    qsort(times, counter, sizeof(long long), compare_ll);
 
+    long long min_time = times[0];
+    long long max_time = times[counter - 1];
+    long long median_time = times[counter / 2];
+
+    printf("Min time: %lld ns, Max time: %lld ns, Median time: %lld ns\n", min_time, max_time, median_time);
+
+    free(times);
     pthread_mutex_destroy(&mutex);
 
     return 0;

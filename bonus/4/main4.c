@@ -11,11 +11,16 @@ void* dummy_function(void* arg) {
     return NULL;
 }
 
+int cmp(const void *a, const void *b) {
+    return (*(long long*)a - *(long long*)b);
+}
+
 // Benchmark function for pthread create and join
 void benchmark() {
     pthread_t thread;
     struct timespec start, end;
-    double min_time = 1e9, max_time = 0, total_time = 0, duration;
+    long long min_time = 1e9, max_time = 0, duration;
+    long long total_durations[NUM_ITERATIONS];
 
     for (int i = 0; i < NUM_ITERATIONS; ++i) {
         clock_gettime(CLOCK_MONOTONIC, &start);
@@ -25,15 +30,18 @@ void benchmark() {
 
         duration = (end.tv_sec - start.tv_sec) * 1e9;
         duration += (end.tv_nsec - start.tv_nsec);
-        total_time += duration;
+        total_durations[i] = duration;
 
         if (duration < min_time) min_time = duration;
         if (duration > max_time) max_time = duration;
     }
 
-    printf("Average time per create+join: %.2f ns\n", total_time / NUM_ITERATIONS);
-    printf("Minimum time: %.2f ns\n", min_time);
-    printf("Maximum time: %.2f ns\n", max_time);
+    // Sorting to find the median
+    qsort(total_durations, NUM_ITERATIONS, sizeof(long long), cmp);
+
+    printf("Median time per create+join: %lld ns\n", total_durations[NUM_ITERATIONS / 2]);
+    printf("Minimum time: %lld ns\n", min_time);
+    printf("Maximum time: %lld ns\n", max_time);
 }
 
 int main() {

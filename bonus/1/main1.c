@@ -19,13 +19,12 @@ void benchmark_clock(clockid_t clock_id, const char* clock_name) {
         clock_gettime(CLOCK_MONOTONIC, &start);
 
         for (int i = 0; i < NUM_ITERATIONS; ++i) {
-            struct timespec temp_start, temp_end;
-            clock_gettime(clock_id, &temp_start); // Start time of the function call
-            clock_gettime(clock_id, &temp_end);   // End time of the function call
+            struct timespec temp;
+            clock_gettime(clock_id, &temp);
         }
 
         clock_gettime(CLOCK_MONOTONIC, &end);
-        long long duration = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
+        long long duration = ((end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec)) / NUM_ITERATIONS;
         total_durations[run] = duration;
         if (duration < min_duration) min_duration = duration;
         if (duration > max_duration) max_duration = duration;

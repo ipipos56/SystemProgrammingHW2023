@@ -129,6 +129,10 @@ void client(int pack_size, long total_size) {
     close(sock);
 }
 
+int cmp(const void *a, const void *b) {
+    return (*(double*)a - *(double*)b);
+}
+
 void calculate_stats(double durations[], int n, double *min, double *max, double *median) {
     *min = *max = durations[0];
     for (int i = 1; i < n; i++) {
@@ -137,7 +141,7 @@ void calculate_stats(double durations[], int n, double *min, double *max, double
     }
 
     // For median, sort the array and find the middle value
-    qsort(durations, n, sizeof(double), (int (*)(const void *, const void *))strcmp);
+    qsort(durations, n, sizeof(double), cmp);
     if (n % 2 == 0) {
         *median = (durations[n / 2 - 1] + durations[n / 2]) / 2;
     } else {

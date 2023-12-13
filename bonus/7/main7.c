@@ -16,9 +16,9 @@ typedef struct {
 
 void *increment_function(void *arg) {
     ThreadArg *threadArg = (ThreadArg *)arg;
-    volatile int dummy = 0; // To prevent loop optimization
+    //volatile int dummy = 0; // To prevent loop optimization
 
-    for (uint64_t i = 0; i < NUM_INCREMENTS && !dummy; ++i) {
+    for (volatile uint64_t i = 0; i < NUM_INCREMENTS; ++i){
         threadArg->array[threadArg->index]++;
     }
 
