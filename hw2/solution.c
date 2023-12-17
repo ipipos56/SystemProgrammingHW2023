@@ -10,6 +10,7 @@
 #include <fcntl.h>
 
 
+
 // Structure to represent a child process
 struct ChildProcess {
     pid_t pid;
@@ -33,6 +34,12 @@ static void addChildProcess(struct ChildProcessList* list, pid_t pid) {
     list->head = newProcess;
 }
 
+static void freeChildProcessNode(struct ChildProcess* processNode) {
+    if (processNode != NULL) {
+        free(processNode);
+    }
+}
+
 // Function to wait for all child processes to finish
 static int waitForChildProcesses(struct ChildProcessList* list) {
     int lastStatus = 0;
@@ -45,7 +52,7 @@ static int waitForChildProcesses(struct ChildProcessList* list) {
         }
         struct ChildProcess* temp = current;
         current = current->next;
-        free(temp);
+        freeChildProcessNode(temp); // Free each ChildProcess node after processing
     }
     list->head = NULL;
     free(list);
@@ -71,9 +78,26 @@ static int handle_exit(const struct expr* e) {
         return 0;
 }
 
+struct ExecutionResult {
+    int exitCode;
+    int forceExitCode;
+};
 
-static int
-my_execute_command_line(const struct command_line* line) {
+
+struct ExecutionResult forceExit(struct ExecutionResult execResult, struct ChildProcessList* childList, int code) {
+    waitForChildProcesses(childList);
+    execResult.forceExitCode = code;
+    return execResult;
+}
+
+struct ExecutionResult gracefulExit(struct ExecutionResult execResult, struct ChildProcessList* childList) {
+    int exitCode = waitForChildProcesses(childList);
+    execResult.exitCode = exitCode;
+    return execResult;
+}
+
+static struct ExecutionResult
+my_execute_command_line(const struct command_line* line, struct ExecutionResult execResult) {
     assert(line != NULL);
     const struct expr* e = line->head;
 
@@ -81,9 +105,10 @@ my_execute_command_line(const struct command_line* line) {
     int curr_fd[2] = {-1, -1};
 
     struct ChildProcessList* childList = malloc(sizeof(struct ChildProcessList));
+
     if (childList == NULL) {
         perror("malloc");
-        exit(EXIT_FAILURE);
+        return forceExit(execResult, childList, EXIT_FAILURE);
     }
     childList->head = NULL;
     //FILE * file_ptr = fopen("../tt.txt", "a");
@@ -93,8 +118,7 @@ my_execute_command_line(const struct command_line* line) {
         if (e->next != NULL && e->next->type == EXPR_TYPE_PIPE) {
             if (pipe(curr_fd) == -1) {
                 perror("pipe");
-                waitForChildProcesses(childList);
-                exit(EXIT_FAILURE);
+                return forceExit(execResult, childList, EXIT_FAILURE);
             }
             // printf("pipe %d %d\n", curr_fd[0], curr_fd[1]);
         }
@@ -109,30 +133,21 @@ my_execute_command_line(const struct command_line* line) {
         if (e->type == EXPR_TYPE_COMMAND) {
             int exitCode = handle_exit(e);
             if (first == 1 && exitCode != -1) {
-                waitForChildProcesses(childList);
-                exit(exitCode);
+                return forceExit(execResult, childList, exitCode);
             }
-            char** args = malloc((e->cmd.arg_count + 2) * sizeof(char *));
-            args[0] = e->cmd.exe;
-            for (uint32_t i = 0; i < e->cmd.arg_count; ++i) {
-                args[i + 1] = e->cmd.args[i];
-            }
-            args[e->cmd.arg_count + 1] = NULL;
 
             const pid_t pid = fork();
             switch (pid) {
                 case -1:
                     perror("fork");
-                    waitForChildProcesses(childList);
-                    exit(EXIT_FAILURE);
+                    return forceExit(execResult, childList, EXIT_FAILURE);
                 case 0:
                     if (prev_fd[0] != -1) {
                         // printf("exe %s dup2 %d %d\n", e->cmd.exe, prev_fd[0], STDIN_FILENO);
                         close(prev_fd[1]);
                         if (dup2(prev_fd[0], STDIN_FILENO) == -1) {
                             perror("dup2");
-                            waitForChildProcesses(childList);
-                            exit(EXIT_FAILURE);
+                            return forceExit(execResult, childList, EXIT_FAILURE);
                         }
                         close(prev_fd[0]);
                     }
@@ -141,8 +156,7 @@ my_execute_command_line(const struct command_line* line) {
                         close(curr_fd[0]);
                         if (dup2(curr_fd[1], STDOUT_FILENO) == -1) {
                             perror("dup2");
-                            waitForChildProcesses(childList);
-                            exit(EXIT_FAILURE);
+                            return forceExit(execResult, childList, EXIT_FAILURE);
                         }
                         close(curr_fd[1]);
                     } else {
@@ -159,28 +173,32 @@ my_execute_command_line(const struct command_line* line) {
                         }
                         if (out_fd == -1) {
                             perror("open");
-                            waitForChildProcesses(childList);
-                            exit(EXIT_FAILURE);
+                            return forceExit(execResult, childList, EXIT_FAILURE);
                         }
                         if (out_fd != STDOUT_FILENO) {
                             if (dup2(out_fd, STDOUT_FILENO) == -1) {
                                 perror("dup2");
-                                waitForChildProcesses(childList);
-                                exit(EXIT_FAILURE);
+                                return forceExit(execResult, childList, EXIT_FAILURE);
                             }
                             close(out_fd);
                         }
                     }
 
+                    char** args = malloc((e->cmd.arg_count + 2) * sizeof(char *));
+                    args[0] = e->cmd.exe;
+                    for (uint32_t i = 0; i < e->cmd.arg_count; ++i) {
+                        args[i + 1] = e->cmd.args[i];
+                    }
+                    args[e->cmd.arg_count + 1] = NULL;
 
                     execvp(e->cmd.exe, args);
 
-                    waitForChildProcesses(childList);
-                    exit(atoi(e->cmd.args[0]));  // Exit with a failure status
+                    free(args);
+
+                    return forceExit(execResult, childList, atoi(e->cmd.args[0]));
                 default:
                     addChildProcess(childList, pid);
             }
-            free(args);
         } else if (e->type == EXPR_TYPE_PIPE) {
             if (prev_fd[0] != -1) close(prev_fd[0]);
             if (prev_fd[1] != -1) close(prev_fd[1]);
@@ -203,22 +221,19 @@ my_execute_command_line(const struct command_line* line) {
     }
     if (prev_fd[0] != -1) close(prev_fd[0]);
     if (prev_fd[1] != -1) close(prev_fd[1]);
-    int lastExitStatus = waitForChildProcesses(childList);
-    return lastExitStatus;
+    return gracefulExit(execResult, childList);
 }
 
 int
 main(void) {
-//#if CHECK_LEAKS == 1
 //    heaph_get_alloc_count();
-//#endif
     const size_t buf_size = 4096;
     char buf[buf_size];
     int rc;
     struct parser* p = parser_new();
     // printf("> ");
     // fflush(stdout);
-    int lastExitStatus;
+    struct ExecutionResult execResult = {-1, -1};
     while ((rc = read(STDIN_FILENO, buf, buf_size)) > 0) {
         parser_feed(p, buf, rc);
         struct command_line* line = NULL;
@@ -228,17 +243,31 @@ main(void) {
                 break;
             if (err != PARSER_ERR_NONE) {
                 printf("Error: %d\n", (int) err);
+                command_line_delete(line);
                 continue;
             }
-            lastExitStatus = my_execute_command_line(line);
+            execResult = my_execute_command_line(line, execResult);
             command_line_delete(line);
+            if (execResult.forceExitCode != -1) {
+                break;
+            }
         }
         // printf("> ");
         // fflush(stdout);
+        if (execResult.forceExitCode != -1) {
+            break;
+        }
     }
     parser_delete(p);
-//#if CHECK_LEAKS == 1
+
+    int exitCode = 0;
+    if (execResult.forceExitCode != -1) {
+        exitCode = execResult.forceExitCode;
+    }
+    if (execResult.exitCode != -1) {
+        exitCode = execResult.exitCode;
+    }
 //    heaph_get_alloc_count();
-//#endif
-    return lastExitStatus;
+//    free(execResult);
+    return exitCode;
 }
